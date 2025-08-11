@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Meu Cofrinho - Nubank + Gráficos</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+:root {
+  --roxo: #8a05be;
+  --roxo-escuro: #5d027f;
+  --lilas: #b5179e;
+  --rosa: #ff4da6;
+  --bg: linear-gradient(135deg, var(--roxo), var(--lilas));
+  --card-bg: rgba(255, 255, 255, 0.12);
+  --text-light: #fff;
+  --text-dark: #222;
+  --verde: #2ecc71;
+  --vermelho: #e74c3c;
+}
+
+/* Tema escuro automático */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --card-bg: rgba(0,0,0,0.4);
+    --text-light: #fff;
+    --text-dark: #fff;
+  }
+}
+
+* { box-sizing: border-box; font-family: "Inter", sans-serif; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-light);
+  min-height: 100vh;
+  padding: 18px;
+}
+
+h1 { margin: 0; font-size: 1.5rem; font-weight: 700; }
+
+.app { max-width: 980px; margin: auto; display: grid; gap: 16px; }
+
+/* Cabeçalho */
+header {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+}
+
+/* Cartões */
+.card {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  transition: transform .2s;
+}
+.card:hover { transform: translateY(-2px); }
+
+/* Saldo e resumo */
+.balance {
+  font-size: 2rem;
+  font-weight: bold;
+}
+.summary {
+  margin-top: 4px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* Botões */
+button {
+  cursor: pointer;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--lilas);
+  color: white;
+  font-weight: bold;
+  transition: background .2s;
+}
+button:hover { background: var(--roxo-escuro); }
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.4);
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.1); }
+
+/* Inputs e selects */
+input, select {
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+  flex: 1;
+  color: var(--text-dark);
+  font-weight: 600;
+}
+input:focus, select:focus { box-shadow: 0 0 0 2px var(--lilas); }
+
+/* Lista */
+.tx-list { margin-top: 8px; max-height: 240px; overflow-y: auto; }
+.tx {
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(255,255,255,0.08);
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  animation: fadeIn .3s ease;
+}
+.tx .amount.income { color: var(--verde); font-weight: bold; }
+.tx .amount.expense { color: var(--vermelho); font-weight: bold; }
+
+/* Badge */
+.badge {
+  font-size: 12px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 999px;
+}
+
+/* Animação */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Grid para gráficos */
+.graphs {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
+}
+
+/* Títulos */
+h3 {
+  margin: 0 0 10px 0;
+}
+
+/* Responsivo */
+@media (max-width: 700px) {
+  .graphs {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+  <header>
+    <h1><i class="fa fa-piggy-bank"></i> Meu Cofrinho</h1>
+    <div>
+      <button id="exportCsv"><i class="fa fa-file-csv"></i> CSV</button>
+      <button id="exportJson" class="btn-ghost"><i class="fa fa-download"></i> JSON</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="balance" id="balance">R$ 0,00</div>
+    <div class="summary" id="summaryText">0 receitas • 0 despesas</div>
+  </div>
+
+  <div class="card" style="display:grid; gap:12px;">
+    <form id="form" style="display:grid;gap:8px">
+      <div style="display:flex;gap:8px; flex-wrap: wrap;">
+        <select id="type" aria-label="Tipo da transação" style="min-width:130px;">
+          <option value="income">Receita</option>
+          <option value="expense">Despesa</option>
+        </select>
+
+        <select id="category" aria-label="Categoria da transação" style="min-width:150px;">
+          <option value="Comida">Comida</option>
+          <option value="Transporte">Transporte</option>
+          <option value="Lazer">Lazer</option>
+          <option value="Contas">Contas</option>
+          <option value="Compras">Compras</option>
+          <option value="Outros">Outros</option>
+        </select>
+
+        <input id="amount" type="number" step="0.01" placeholder="Valor" required min="0.01" aria-label="Valor da transação" />
+
+        <input id="date" type="date" aria-label="Data da transação" required />
+
+        <input id="desc" placeholder="Descrição (opcional)" aria-label="Descrição da transação" />
+      </div>
+      <button type="submit"><i class="fa fa-plus"></i> Adicionar</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Lançamentos</h3>
+    <div class="tx-list" id="txList" aria-live="polite" aria-relevant="additions"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap: wrap;">
+      <label for="filterPeriod" style="font-weight: 600;">Período:</label>
+      <select id="filterPeriod" aria-label="Filtro de período">
+        <option value="7">Últimos 7 dias</option>
+        <option value="30">Últimos 30 dias</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="graphs card" aria-label="Gráficos financeiros">
+    <div>
+      <h3>Gastos por Dia (Barras)</h3>
+      <canvas id="barChart"></canvas>
+    </div>
+    <div>
+      <h3>Gastos por Categoria (Pizza)</h3>
+      <canvas id="pieChart"></canvas>
+    </div>
+    <div>
+      <h3>Evolução do Saldo (Linha)</h3>
+      <canvas id="lineChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const formatBR = v => (Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const STORAGE_KEY = 'meu_cofrinho_nubank_v3';
+let state = { tx: [] };
+
+// Carregar dados do localStorage
+function load(){
+  const data = localStorage.getItem(STORAGE_KEY);
+  if(data) state = JSON.parse(data);
+}
+
+// Salvar dados no localStorage
+function save(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// Formatar data para dd/mm
+function formatDateDM(d){
+  const date = new Date(d);
+  return date.toLocaleDateString('pt-BR', {day: '2-digit', month:'2-digit'});
+}
+
+// Formatar data para yyyy-mm-dd (input date)
+function formatDateInput(d){
+  const date = new Date(d);
+  return date.toISOString().slice(0,10);
+}
+
+// Gerar lista de datas entre start e end (inclusive)
+function dateRange(start, end){
+  const arr = [];
+  for(let dt=new Date(start); dt<=end; dt.setDate(dt.getDate()+1)){
+    arr.push(new Date(dt));
+  }
+  return arr;
+}
+
+// Filtrar transações por período em dias contando até hoje
+function filterTxByDays(days){
+  const cutoff = new Date();
+  cutoff.setHours(0,0,0,0);
+  cutoff.setDate(cutoff.getDate() - (days-1));
+  return state.tx.filter(t=>{
+    const d = new Date(t.date);
+    return d >= cutoff && d <= new Date();
+  });
+}
+
+// Agregar transações por dia para gráfico de barras
+function aggregateByDay(transactions, days){
+  const cutoff = new Date();
+  cutoff.setHours(0,0,0,0);
+  cutoff.setDate(cutoff.getDate() - (days-1));
+
+  const dayMap = {};
+  for(let dt of dateRange(cutoff, new Date())){
+    const key = dt.toISOString().slice(0,10);
+    dayMap[key] = 0;
+  }
+  for(let t of transactions){
+    if(t.type === 'expense'){
+      if(dayMap[t.date] !== undefined){
+        dayMap[t.date] += t.amount;
+      }
+    }
+  }
+  return dayMap;
+}
+
+// Agregar transações por categoria para gráfico pizza
+function aggregateByCategory(transactions){
+  const catMap = {
+    Comida: 0,
+    Transporte: 0,
+    Lazer: 0,
+    Contas: 0,
+    Compras: 0,
+    Outros: 0
+  };
+  for(let t of transactions){
+    if(t.type === 'expense' && catMap.hasOwnProperty(t.category)){
+      catMap[t.category] += t.amount;
+    }
+  }
+  return catMap;
+}
+
+// Agregar evolução do saldo por dia para gráfico de linha
+function aggregateBalanceOverTime(transactions, days){
+  const cutoff = new Date();
+  cutoff.setHours(0,0,0,0);
+  cutoff.setDate(cutoff.getDate() - (days-1));
+  const dates = dateRange(cutoff, new Date());
+  const balanceMap = {};
+  let currentBalance = 0;
+
+  // Ordenar transações por data asc
+  const txSorted = transactions.slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+  // Preenche balanceMap com 0 inicialmente
+  for(let dt of dates){
+    balanceMap[dt.toISOString().slice(0,10)] = 0;
+  }
+
+  // Acumula o saldo até cada dia
+  let i = 0;
+  for(let dt of dates){
+    const dayStr = dt.toISOString().slice(0,10);
+    while(i < txSorted.length && txSorted[i].date <= dayStr){
+      currentBalance += (txSorted[i].type==='income' ? txSorted[i].amount : -txSorted[i].amount);
+      i++;
+    }
+    balanceMap[dayStr] = currentBalance;
+  }
+  return balanceMap;
+}
+
+// Atualizar lista de transações
+function renderTxList(transactions){
+  const txList = $('txList');
+  txList.innerHTML = '';
+  for(let t of transactions){
+    const div = document.createElement('div');
+    div.className = 'tx';
+    div.innerHTML = `
+      <div>
+        <strong>${t.desc || '(sem descrição)'}</strong><br>
+        <small>${t.category} - ${formatDateDM(t.date)}</small>
+      </div>
+      <div class="amount ${t.type}">${t.type==='income'?'+':'-'} ${formatBR(t.amount)}</div>
+    `;
+    txList.appendChild(div);
+  }
+}
+
+// Atualizar o saldo e resumo
+function updateSummary(transactions){
+  let income = 0, expense = 0;
+  for(let t of transactions){
+    if(t.type==='income') income += t.amount;
+    else expense += t.amount;
+  }
+  const balance = income - expense;
+  $('balance').textContent = formatBR(balance);
+  $('summaryText').textContent = `${transactions.filter(x=>x.type==='income').length} receitas • ${transactions.filter(x=>x.type==='expense').length} despesas`;
+
+  if(balance < 0){
+    $('balance').style.color = 'var(--vermelho)';
+  } else {
+    $('balance').style.color = 'white';
+  }
+}
+
+// Atualizar todos os gráficos
+let barChart, pieChart, lineChart;
+function updateCharts(transactions, days){
+  // Barras por dia
+  const byDay = aggregateByDay(transactions, days);
+  const labelsBar = Object.keys(byDay).map(d=> {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('pt-BR', {weekday:'short', day:'2-digit', month:'2-digit'});
+  });
+  const dataBar = Object.values(byDay);
+
+  // Pizza por categoria
+  const byCat = aggregateByCategory(transactions);
+  const labelsPie = Object.keys(byCat);
+  const dataPie = Object.values(byCat);
+
+  // Linha evolução saldo
+  const balanceMap = aggregateBalanceOverTime(state.tx, days);
+  const labelsLine = Object.keys(balanceMap).map(d=> {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+  });
+  const dataLine = Object.values(balanceMap);
+
+  if(barChart) barChart.destroy();
+  if(pieChart) pieChart.destroy();
+  if(lineChart) lineChart.destroy();
+
+  const commonOptions = {
+    plugins: {
+      legend: { labels: { color: 'white', font: { weight: 'bold' } } }
+    },
+    scales: {
+      x: { ticks: { color: 'white' } },
+      y: { ticks: { color: 'white' }, beginAtZero: true }
+    }
+  };
+
+  barChart = new Chart($('barChart'), {
+    type: 'bar',
+    data: {
+      labels: labelsBar,
+      datasets: [{
+        label: 'Gastos por dia',
+        data: dataBar,
+        backgroundColor: 'rgba(255, 99, 132, 0.7)'
+      }]
+    },
+    options: commonOptions
+  });
+
+  pieChart = new Chart($('pieChart'), {
+    type: 'pie',
+    data: {
+      labels: labelsPie,
+      datasets: [{
+        label: 'Gastos por categoria',
+        data: dataPie,
+        backgroundColor: [
+          '#ff6384','#36a2eb','#ffcd56','#4bc0c0','#9966ff','#ff9f40'
+        ]
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { position: 'right', labels: { color: 'white', font: { weight: 'bold' } } }
+      }
+    }
+  });
+
+  lineChart = new Chart($('lineChart'), {
+    type: 'line',
+    data: {
+      labels: labelsLine,
+      datasets: [{
+        label: 'Evolução do saldo',
+        data: dataLine,
+        borderColor: 'rgba(255, 255, 255, 0.9)',
+        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 6
+      }]
+    },
+    options: commonOptions
+  });
+}
+
+// Renderização principal
+function render(){
+  const period = Number($('filterPeriod').value);
+  const filteredTx = filterTxByDays(period);
+
+  renderTxList(filteredTx);
+  updateSummary(filteredTx);
+  updateCharts(filteredTx, period);
+}
+
+window.onload = ()=>{
+  load();
+  render();
+  $('date').value = new Date().toISOString().slice(0,10);
+};
+
+$('form').addEventListener('submit', e=>{
+  e.preventDefault();
+  const tx = {
+    type: $('type').value,
+    category: $('category').value,
+    amount: parseFloat($('amount').value),
+    date: $('date').value,
+    desc: $('desc').value.trim()
+  };
+  if(!tx.amount || tx.amount <= 0) return alert('Insira um valor válido.');
+  if(!tx.date) return alert('Selecione uma data.');
+
+  state.tx.push(tx);
+  save();
+  render();
+
+  e.target.reset();
+  $('date').value = new Date().toISOString().slice(0,10);
+});
+
+$('filterPeriod').addEventListener('change', render);
+
+$('exportCsv').addEventListener('click', ()=>{
+  if(!state.tx.length) return alert('Nada para exportar');
+  const csv = 'type,category,amount,date,desc\n' + state.tx.map(t=>`${t.type
